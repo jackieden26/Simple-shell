@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
 		} else {
 			perror("fork");
-			exit(-1);
+			exit(1);
 
 		}
 	}
