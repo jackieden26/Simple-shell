@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
 		else {
 			perror("something goes wrong");
 		}
-
+		//add a comment
 		// Prase line
 		char userInputCopy[512];
 		strcpy(userInputCopy, userInput);
