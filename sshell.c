@@ -4,7 +4,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <string.h>
-
+#include <errno.h>
 
 int main(int argc, char *argv[])
 {
@@ -22,6 +22,7 @@ int main(int argc, char *argv[])
 		else {
 			perror("something goes wrong");
 		}
+		//add a comment
 		//add a comment
 		// Prase line
 		char userInputCopy[512];
@@ -63,15 +64,53 @@ int main(int argc, char *argv[])
 		pid_t pid;
 		int status;
 
+		/*
+		sshell$ &
+		Error: invalid command line
+
+		sshell$ toto
+		Error: command not found
+		+ completed 'toto' [1]
+
+		sshell$ cd toto
+		Error: no such directory
+
+		sshell$ grep toto < tata
+		Error: cannot open input file
+
+		sshell$ cat <
+		Error: no input file
+
+		sshell$ echo hack > /etc/passwd
+		Error: cannot open output file
+
+		sshell$ echo >
+		Error: no output file
+
+		sshell$ cat file | grep toto < file
+		Error: mislocated input redirection
+
+		sshell$ echo Hello world! > file | cat file
+		Error: mislocated output redirection
+
+		sshell$ echo > file & | grep toto
+		Error: mislocated background sign
+
+		sshell$ exit
+		Error: active jobs still running
+		+ completed 'exit' [1]
+		*/
+
+
+
 		pid = fork();
 
 		if (pid == 0) {
 			// child
-			// char *test[2] = {"date", NULL};
-			// execvp(test[0], test);
-			// perror("execvp");
-			// char *fileArgPtr[2] = {userInput, NULL};
 			execvp(target[0], target);
+			//if (execvp(target[0], target) == -1){
+			//	printf("ERROR: %s\n", strerror(errno));
+			//}
 			perror("execvp");
 		} else if (pid > 0) {
 			// parent
