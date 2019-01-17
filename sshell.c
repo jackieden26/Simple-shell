@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 					continue;
 				}
 			}
-			//cd filename 
+			//cd filename
 			i = 0;
 			count= 0;
 		    char *p = strtok (userInputCopy, " ");
@@ -109,7 +109,13 @@ int main(int argc, char *argv[])
 		    }
 			for (i = 0;i<count;i++) {
 				if (i==(count-1)) {
-					chdir(array[i]);
+					if (chdir( array[i] ) == 0){
+						break;
+					}
+					//chdir(array[i]);
+					else {
+						fprintf(stderr,"Error: no such directory\n");
+					}
 				}
 			}
 			//reverse string
