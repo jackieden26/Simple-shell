@@ -1,11 +1,12 @@
+
 default: sshell
 
-sshell.o: sshell.c
-	gcc -c -Wall -Werror sshell.c -o sshell.o
-
 sshell: sshell.o
-	gcc sshell.o -Wall -Werror -o sshell
+	gcc -Wall -Werror -o sshell sshell.o
+
+sshell.o: sshell.c
+	gcc -Wall -Werror -c -o sshell.o sshell.c
+
 
 clean:
-	-rm -f sshell.o
-	-rm -f sshell
+	-rm -f sshell.o sshell
