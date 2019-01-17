@@ -13,22 +13,18 @@ struct Command {
 int main(int argc, char *argv[])
 {
 	while (1) {
-		// Display prompt
 		//struct Command cmd[512];
-		// Read line from input
 		// https://stackoverflow.com/questions/2693776/removing-trailing-newline-character-from-fgets-input
 		char userInput[512];
 		char *pos;
-		// Prase line
 		char userInputCopy[512];
 		int index = 0;
 		int wordIndex = 0;
 		char *target[16];
 		pid_t pid;
-		int status;
-		char buf[256];
-		//char pre_cd[256];
-		//int i;
+		int status,i,count;
+		char buf[256],pre_cd[256];
+		char *array[100];
 
 		printf("sshell$ ");
 		fgets(userInput, 512, stdin);
@@ -38,9 +34,9 @@ int main(int argc, char *argv[])
 		else {
 			perror("something goes wrong");
 		}
-		//printf("strLength is: %d\n", strLength);
 		strcpy(userInputCopy, userInput);
 		int strLength = strlen(userInput);
+		//printf("strLength is: %d\n", strLength);
 		// Remove all white space and tab to '\0'
 		while(index < strLength) {
 			if (userInput[index] == ' ' || userInput[index] == '\t') {
@@ -66,7 +62,7 @@ int main(int argc, char *argv[])
 
 
 		target[wordIndex] = NULL;
-		fprintf(stderr,"target %s\n",*target);
+		//fprintf(stderr,"target %c\n",userInput[strlen(userInput)-1]);
 		//print exit
 		if (strcmp(*target, "exit") == 0) {
 			fprintf(stderr, "Bye...\n");
@@ -80,10 +76,45 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
 			continue;
 		}
+		//print cd
 		else if ((strcmp(*target, "cd") == 0)) {
-			//problems with this part
-			//char arg[2] = '..';
-			//chdir('.');
+			getcwd(buf,sizeof(buf));
+			strcpy(pre_cd,buf);
+			//cd .. or cd .
+			if ((userInputCopy[strlen(userInputCopy)-1]) == '.') {
+				if ((userInputCopy[strlen(userInputCopy)-2]) == '.') {
+					for (i = (strlen(buf)-1);i>0;i--) {
+						if (pre_cd[strlen(pre_cd)-1] == '/') {
+							pre_cd[strlen(pre_cd)-1] = 0;
+							break;
+						}
+						pre_cd[strlen(pre_cd)-1] = 0;
+					}
+					chdir(pre_cd);
+				}
+				else {
+					chdir(buf);
+					continue;
+				}
+			}
+			//cd filename 
+			i = 0;
+			count= 0;
+		    char *p = strtok (userInputCopy, " ");
+
+		    while (p != NULL) {
+		        array[i++] = p;
+		        p = strtok (NULL, " ");
+				count++;
+		    }
+			for (i = 0;i<count;i++) {
+				if (i==(count-1)) {
+					chdir(array[i]);
+				}
+			}
+			//reverse string
+			waitpid(-1, &status, 0);
+			fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
 			continue;
 		}
 
@@ -109,6 +140,7 @@ int main(int argc, char *argv[])
 void parseArg(char *target[]) {
 
 }
+
 
 /*
 sshell$ &
