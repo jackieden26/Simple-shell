@@ -5,11 +5,21 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-/*
-struct Command {
-	char *args[16];
+#include <fcntl.h>
+#include <stdbool.h>
+
+struct Input {
+	struct Cmd command;
+	bool background;
 };
-*/
+
+struct Cmd {
+	char *exec;
+	char *args[16];
+	char *inputFile;
+	char *outputFile;
+};
+
 int main(int argc, char *argv[])
 {
 	while (1) {
@@ -25,8 +35,17 @@ int main(int argc, char *argv[])
 		int status,i,count;
 		char buf[256],pre_cd[256];
 		char *array[100];
+		char *string = " ";
+		struct Input user_input;
+		struct Cmd command;
+		char *
+
+		//char *path;
+		//int fd;
 
 		printf("sshell$ ");
+
+		//read userinput
 		fgets(userInput, 512, stdin);
 		if ((pos = strchr(userInput, '\n')) != NULL) {
 			*pos = '\0';
@@ -36,8 +55,7 @@ int main(int argc, char *argv[])
 		}
 		strcpy(userInputCopy, userInput);
 		int strLength = strlen(userInput);
-		//printf("strLength is: %d\n", strLength);
-		// Remove all white space and tab to '\0'
+
 		while(index < strLength) {
 			if (userInput[index] == ' ' || userInput[index] == '\t') {
 				userInput[index] = '\0';
@@ -59,10 +77,74 @@ int main(int argc, char *argv[])
 				index++;
 			}
 		}
-
-
 		target[wordIndex] = NULL;
+
+		//put userinput into struct
+		for (i = 0; i < strlen(userInputCopy); i++) {
+			if (strcmp(userInputCopy[i],"|")==0) {
+
+			}
+		}
+
 		//fprintf(stderr,"target %c\n",userInput[strlen(userInput)-1]);
+
+		//tokenize userinput and store in array (an array of strings)
+
+		if (strstr(userInputCopy,"<") != NULL) {
+			string = "<";
+		}
+		else if (strstr(userInputCopy,">") != NULL) {
+			string = ">";
+		}
+
+		i = 0;
+		count= 0;
+		char *p = strtok (userInputCopy, string);
+
+		while (p != NULL) {
+			array[i++] = p;
+			p = strtok (NULL, string);
+			count++;
+		}
+
+
+		//printf("count %d\n",count);
+		/*
+		//input redirection
+		if ((count == 1) && (strcmp("<",string) == 0)) {
+			fprintf(stderr,"Error: no input file\n");
+			continue;
+		}
+
+
+		else if (strcmp("<",string) == 0) {
+			for (i = 0;i<count;i++) {
+				if (i==(count-1)) {
+					getcwd(buf,sizeof(buf));
+					path = malloc(strlen(buf)+strlen(array[i])+2);
+					path[0] = '\0';
+					strcat(path,buf);
+					strcat(path,"/");
+					strcat(path,array[i]);
+					//printf("%s \n",path);
+					fd = open(path,O_RDWR);
+					if (fd<0) {
+						fprintf(stderr,"Error: cannot open input file\n");
+						break;
+					}
+					dup2(fd,STDIN_FILENO);
+					close(fd);
+					waitpid(-1, &status, 0);
+					fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
+					//if array[i] exist in current directory
+
+				}
+			}
+			continue;
+		}
+		*/
+
+		//printf("%s\n",string);
 		//print exit
 		if (strcmp(*target, "exit") == 0) {
 			fprintf(stderr, "Bye...\n");
@@ -83,42 +165,24 @@ int main(int argc, char *argv[])
 			//cd .. or cd .
 			if ((userInputCopy[strlen(userInputCopy)-1]) == '.') {
 				if ((userInputCopy[strlen(userInputCopy)-2]) == '.') {
-					for (i = (strlen(buf)-1);i>0;i--) {
-						if (pre_cd[strlen(pre_cd)-1] == '/') {
-							pre_cd[strlen(pre_cd)-1] = 0;
-							break;
-						}
-						pre_cd[strlen(pre_cd)-1] = 0;
-					}
-					chdir(pre_cd);
+					chdir("..");
+					continue;
 				}
 				else {
 					chdir(buf);
-					continue;
 				}
 			}
 			//cd filename
-			i = 0;
-			count= 0;
-		    char *p = strtok (userInputCopy, " ");
-
-		    while (p != NULL) {
-		        array[i++] = p;
-		        p = strtok (NULL, " ");
-				count++;
-		    }
 			for (i = 0;i<count;i++) {
 				if (i==(count-1)) {
 					if (chdir( array[i] ) == 0){
 						break;
 					}
-					//chdir(array[i]);
 					else {
 						fprintf(stderr,"Error: no such directory\n");
 					}
 				}
 			}
-			//reverse string
 			waitpid(-1, &status, 0);
 			fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
 			continue;
@@ -146,8 +210,20 @@ int main(int argc, char *argv[])
 void parseArg(char *target[]) {
 
 }
+/*
+char *tokenize(int *count, char userInputCopy[]) {
+	int i = 0;
+	count= 0;
+	char *p = strtok (userInputCopy, " ");
 
-
+	while (p != NULL) {
+		array[i++] = p;
+		p = strtok (NULL, " ");
+		count++;
+	}
+	return
+}
+*/
 /*
 sshell$ &
 Error: invalid command line
