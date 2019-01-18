@@ -166,11 +166,8 @@ int main(int argc, char *argv[])
 			if ((userInputCopy[strlen(userInputCopy)-1]) == '.') {
 				if ((userInputCopy[strlen(userInputCopy)-2]) == '.') {
 					chdir("..");
-					continue;
 				}
-				else {
-					chdir(buf);
-				}
+				continue;
 			}
 			//cd filename
 			for (i = 0;i<count;i++) {
