@@ -154,7 +154,7 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
     printf("first exec are: %s\n", cmd->exec);
     printf("filein are: %s\n", cmd->fileIn);
     printf("fileout are: %s\n", cmd->fileOut);
-    for (int i = 0; i < 10;i++) {
+    for (int i = 0; i < 5;i++) {
         printf("args: %s\n", cmd->args[i]);
     }
 
@@ -287,12 +287,10 @@ void jobsConstructor(char* userInput, Jobs* job) {
         job->cmds[count] = *cmdPtr;
     	p = strtok(NULL, "|");
     	count++;
-        //printf("exec are: %s\n", job->cmds[0].exec);
-        //printf("exec are: %s\n", cmdPtr->exec);
     }
-    printf("no results here\n");
-    printf("number of commands in jobs is: %d\n", count);
-    printf("exec are: %s\n", job->cmds[0].exec);
+    // printf("no results here\n");
+    // printf("number of commands in jobs is: %d\n", count);
+    // printf("exec are: %s\n", job->cmds[0].exec);
     // printf("exec are: %s\n", cmd.exec);
 
 }
@@ -372,12 +370,19 @@ int main(int argc, char *argv[])
         // userInput is modified in this function.
         jobsConstructor(userInput, myjobPtr);
         printf("background: %d\n", myjobPtr->background); //1->false; 0->true
-        printf("exec are: %s\n", myjobPtr->cmds[0].exec);
-        // printf("filein are: %s\n", myjobPtr->cmds[0]->fileIn);
-        // printf("fileout are: %s\n", myjobPtr->cmds[0]->fileOut);
-        // for (int i = 0; i < 10;i++) {
-        //     printf("args: %s\n", myjobPtr->cmds[0]->args[i]);
-        // }
+        printf("first exec are: %s\n", myjobPtr->cmds[0].exec);
+        printf("frist filein are: %s\n", myjobPtr->cmds[0].fileIn);
+        printf("first fileout are: %s\n", myjobPtr->cmds[0].fileOut);
+        for (int i = 0; i < 5;i++) {
+            printf("first args: %s\n", myjobPtr->cmds[0].args[i]);
+        }
+
+        printf("second exec are: %s\n", myjobPtr->cmds[1].exec);
+        printf("second filein are: %s\n", myjobPtr->cmds[1].fileIn);
+        printf("second fileout are: %s\n", myjobPtr->cmds[1].fileOut);
+        for (int i = 0; i < 5;i++) {
+            printf("second args: %s\n", myjobPtr->cmds[1].args[i]);
+        }
 
 
 
