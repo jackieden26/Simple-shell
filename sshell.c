@@ -291,7 +291,7 @@ void jobsConstructor(char* userInput, Jobs* job) {
         //printf("exec are: %s\n", cmdPtr->exec);
     }
     printf("no results here\n");
-    printf("number of pipes in jobs is: %d\n", count);
+    printf("number of commands in jobs is: %d\n", count);
     printf("exec are: %s\n", job->cmds[0].exec);
     // printf("exec are: %s\n", cmd.exec);
 
