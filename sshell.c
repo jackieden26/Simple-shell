@@ -211,23 +211,14 @@ void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
 int main(int argc, char *argv[])
 {
 	while (1) {
-		//struct Command cmd[MAX_INPUT];
 		// https://stackoverflow.com/questions/2693776/removing-trailing-newline-character-from-fgets-input
 		char userInput[MAX_INPUT];
 		char userInputCopy[MAX_INPUT];
-		// int index = 0;
-		// int wordIndex = 0;
-		// char *target[16];
 		pid_t pid;
 		int status;
 		// int count;
 		char buf[256];
 		char pre_cd[256];
-		// char *array[100];
-
-		// struct Input user_input;
-		// struct Cmd command;
-		//int fd;
         int saveStdout = dup(STDOUT_FILENO);
         int saveStdin = dup(STDIN_FILENO);
 		printf("sshell$ ");
@@ -235,7 +226,6 @@ int main(int argc, char *argv[])
 		// Read user input, and append \0 at the end.
 		fgets(userInput, MAX_INPUT, stdin);
 
-        //for testing purpose
         /* Print command line if we're not getting stdin from the
 		 * terminal */
 		if (!isatty(STDIN_FILENO)) {
@@ -266,9 +256,9 @@ int main(int argc, char *argv[])
 
 		strcpy(userInputCopy, userInput);
 
-        // Jobs *myjobPtr, myjob;
-        // myjobPtr = &myjob;
-        Jobs *myjobPtr = malloc(sizeof(Jobs));
+        Jobs *myjobPtr, myjob;
+        myjobPtr = &myjob;
+        // Jobs *myjobPtr = malloc(sizeof(Jobs));
 
 
         // userInput is modified in this function.
@@ -287,10 +277,6 @@ int main(int argc, char *argv[])
         // for (int i = 0; i < 5;i++) {
         //     printf("In main second args: %s\n", myjobPtr->cmds[1].args[i]);
         // }
-
-        //error management in phase 5.3.1
-        // sshell$ &
-        // Error: invalid command line
 
         int args_size = 0;
 
@@ -361,7 +347,6 @@ int main(int argc, char *argv[])
             }
         }
 
-
         //output redirection
         //if file redirection exists
         if ((myjobPtr->cmds[0].largerExist == 1) && (myjobPtr->cmdCount == 1)) {
@@ -381,7 +366,40 @@ int main(int argc, char *argv[])
             }
 
         }
+        //pipeline
+        int i;
+        int fd[2];
+        if (myjobPtr->cmdCount > 1) {
+            for (i = 0; i < (myjobPtr->cmdCount - 1); i++) {
 
+                pipe(fd);
+                if (fork() != 0) {
+                    //parent
+                    // close(fd[0]);
+                    dup2(fd[1],STDOUT_FILENO);
+                    close(fd[1]);
+                    //exec process1
+                    execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
+                }
+                else {
+                    //child
+                    // close(fd[1]);
+                    dup2(fd[0],STDIN_FILENO);
+                    close(fd[0]);
+                    //exec process2
+                    // execvp(myjobPtr->cmds[i+1].exec, myjobPtr->cmds[i].args);
+
+                }
+                // execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
+
+
+            }
+            if (i == (myjobPtr->cmdCount - 1)) {
+                execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
+            }
+            printf("finished tube\n");
+            continue;
+        }
 
         pid = fork();
         if (pid == 0) {
@@ -411,7 +429,6 @@ int main(int argc, char *argv[])
             ptrToFree[i] = NULL;
             ptrToFreeCount = 0;
         }
-        free(myjobPtr);
 
 	}
 }
