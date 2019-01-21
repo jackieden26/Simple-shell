@@ -11,20 +11,6 @@
 #define MAX_ARG 16
 #define MAX_INPUT 512
 
-// struct Input {
-// 	struct Cmd command;
-// 	bool background;
-// };
-//
-// struct Cmd {
-// 	char *exec;
-// 	char *args[16];
-// 	char *inputFile;
-// 	char *outputFile;
-// };
-
-// https://stackoverflow.com/questions/13084236/function-to-remove-spaces-from-string-char-array-in-c
-
 int findMax(int x, int y) {
     if (x > y) {
         return x;
@@ -46,8 +32,7 @@ int findMin(int x, int y) {
 char* deblank(char* input) {
     int i,j;
     char *output = input;
-    for (i = 0, j = 0; i < strlen(input); i++, j++)
-    {
+    for (i = 0, j = 0; i < strlen(input); i++, j++) {
         if (input[i]!=' ')
             output[j]=input[i];
         else
@@ -66,15 +51,21 @@ typedef struct {
 
 typedef struct {
     bool background;
-    Command cmds[MAX_INPUT]; //*cmds
+    int cmdCount;
+    Command cmds[MAX_INPUT];
 } Jobs;
 
+char *ptrToFree[MAX_ARG];
+int ptrToFreeCount = 0;
 
-// cmdStr is p in jobsConstructor.
 // This function modifies cmdStr, by replacing whitespace and tab with '\0'
 void commandConstructor(char *cmdStr, int count, Command* cmd) {
-    char cmdStrC[MAX_INPUT];
-    //printf("cmdStr are: %s\n", cmdStr);
+    printf("in commandConstructor, comming cmdStr is: %s\n", cmdStr);
+    printf("coming cmd address is: %p\n", cmd);
+    int strLength = strlen(cmdStr);
+
+    char *cmdStrC = malloc(strLength * sizeof(char));
+    ptrToFree[ptrToFreeCount++] = cmdStrC;
 
     // Initialize every property to be NULL.
     cmd->exec = NULL;
@@ -84,10 +75,8 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
         cmd->args[i] = NULL;
     }
 
-    // Replace every whitespace and tab to NULL character '\0'
-    //formatting strings add one whitespace if there is none
+    // Formatting strings add one whitespace if there is none.
     int j = 0;
-    int strLength = strlen(cmdStr);
     for (int i = 0; i < strLength; i++) {
     	if (cmdStr[i] == ' ' || cmdStr[i] == '\t') {
     		cmdStrC[j] = ' ';
@@ -115,20 +104,22 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
         }
     }
 
-    //stroke input by whitespace
+    // Stroke input by whitespace.
     int i = 0;
     int length = 0;
-    char *split = strtok (cmdStrC, " ");
+    printf("in line 123 cmdStrC is: %s\n", cmdStrC);
+    char *split = strtok(cmdStrC, " ");
     char *cmdArray[MAX_INPUT];
 
     while (split != NULL)
     {
         cmdArray[i++] = split;
-        split = strtok (NULL, " ");
-        length ++;
+        split = strtok(NULL, " ");
+        length++;
+        printf("split is: %s\n", split);
     }
 
-    //store all userinput to its specified position
+    // Store all userinput to its specified position.
     j = 0;
     for (int i = 0; i < length; i++) {
         if (i == 0) {
@@ -137,7 +128,6 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
             j++;
         }
         else if (strcmp(cmdArray[i],"<") == 0) {
-            // printf("this line %s\n",&cmdStrC[i]);
             i += 1;
             cmd->fileIn = cmdArray[i];
         }
@@ -147,6 +137,7 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
         }
         else {
             cmd->args[j] = cmdArray[i];
+            printf("cmdArray[i] is: %s\n", cmdArray[i]);
             j++;
         }
     }
@@ -157,141 +148,44 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
     for (int i = 0; i < 5;i++) {
         printf("args: %s\n", cmd->args[i]);
     }
-
-
-    // exit(0);
-
-    // Create copy of cmdStr with null character for less, large, argument pointer modification.
-    // char cmdStrLe[MAX_INPUT];
-    // char cmdStrLa[MAX_INPUT];
-    // char cmdStrAr[MAX_INPUT];
-    //strcpy(cmdStrLe, cmdStr);
-    // strcpy(cmdStrLa, cmdStr);
-    // strcpy(cmdStrAr, cmdStr);
-
-
-    // int lessStart;
-    // int lessEnd;
-    // // int largerStart;
-    // // int largerEnd;
-    //
-    // char* less = strchr(cmdStrC, '<');
-    // int lessIndex = strLength;
-    // if (less != NULL) {
-    //     lessIndex = (int)(less - cmdStrC);
-    // }
-    // char* larger = strchr(cmdStrC, '>');
-    // int largerIndex = strLength;
-    // if (larger != NULL) {
-    //     largerIndex = (int)(larger - cmdStrC);
-    // }
-    //
-    // // // argStop is either the index of <, > or strLength.
-    // // int argStop = findMin(lessIndex, largerIndex);
-    // //
-    // //
-    // // int wordIndex = 0;
-    // // int index = 0;
-    // // while(index < argStop) {
-    // // 	while (cmdStr[index] == '\0' && index < argStop) {
-    // // 		index++;
-    // // 	}
-    // // 	if (index >= argStop) {
-    // // 		break;
-    // // 	}
-    // // 	cmd->args[wordIndex] = cmdStr + index;
-    // // 	wordIndex++;
-    // // 	while (cmdStr[index] != '\0' && index < argStop) {
-    // // 		index++;
-    // // 	}
-    // // }
-    // //
-    // // cmd->exec = cmd->args[0];
-    //
-    // // Find input file redirection.
-    // if (lessIndex != strLength) {
-    //     for (int i = lessIndex + 1; i < strLength; i++) {
-    //         // Skip \0 right after <.
-    //         if (cmdStrLe[i] == '\0') {
-    //             continue;
-    //         }
-    //         // Set input file redirection pointer.
-    //         else {
-    //             // lessStart to lessEnd is the redirected file.
-    //             lessStart = i;
-    //             for (int j = i; j < strLength; j++) {
-    //                 if (j != '\0' && j != '>') {
-    //                     continue;
-    //                 }
-    //                 else {
-    //                     cmdStrLe[j] = '\0';
-    //                     lessEnd = j-1;
-    //                     break;
-    //                 }
-    //             }
-    //             cmd->fileIn = cmdStrLe + i;
-    //             printf("lessStart and lessEnd is: %d %d\n", lessStart, lessEnd);
-    //             break;
-    //         }
-    //     }
-    // }
-    // cmdStr[lessIndex] = '\0';
-    //
-    // // Find output file redirection.
-    // if (largerIndex != strLength && lessIndex == strLength) {
-    //     for (int i = largerIndex + 1; i < strLength; i++){
-    //         // Skip \0 right after <.
-    //         if (cmdStr[i] == '\0') {
-    //             continue;
-    //         }
-    //         // Set input file redirection pointer.
-    //         else {
-    //             cmd->fileOut = cmdStr + i;
-    //             break;
-    //         }
-    //     }
-    // }
-    //
-    // // If both < and > is in the command string:
-    // if (largerIndex != strLength && lessIndex != strLength) {
-    //     // < is before >.
-    //     if (lessIndex < largerIndex) {
-    //
-    //     }
-    // }
-    //
-    //
-    //
-    //
-    //
-    // printf("fileIn is: %s\n", cmd->fileIn);
-    // printf("exec is: %s\n", cmd->exec);
-    // for (int i = 0; i < 13 ;i++) {
-    //     printf("args[i] is: %s\n", cmd->args[i]);
-    // }
 }
 
-void jobsConstructor(char* userInput, Jobs* job) {
+void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
 
     job->background = false;
 
-    int count= 0;
 
     // P points to the first character of each command string.
-    char *p = strtok(userInput, "|");
+    printf("userInput is: %s\n", userInput);
+    printf("userInputLength is: %d\n", userInputLength);
+    // printf("userInput[0]is: %s\n", userInput[0]);
 
-    while (p != NULL) {
-        Command *cmdPtr, cmd;
-        cmdPtr = &cmd;
-        commandConstructor(p, count, cmdPtr);
-        job->cmds[count] = *cmdPtr;
-    	p = strtok(NULL, "|");
-    	count++;
+    char *startPtr[MAX_ARG];
+    startPtr[0] = userInput;
+    int ptrCount = 1;
+
+    for (int i = 0; i < userInputLength; i++) {
+        if (userInput[i] == '|') {
+            userInput[i] = '\0';
+            startPtr[ptrCount] = userInput + i + 1;
+            ptrCount++;
+        }
     }
-    // printf("no results here\n");
-    // printf("number of commands in jobs is: %d\n", count);
-    // printf("exec are: %s\n", job->cmds[0].exec);
-    // printf("exec are: %s\n", cmd.exec);
+
+
+    Command myCommandArray[ptrCount];
+
+
+    for (int i = 0; i < ptrCount; i++) {
+        printf("startPtr storing value is: %s\n", startPtr[i]);
+        commandConstructor(startPtr[i], ptrCount, &myCommandArray[i]);
+        job->cmds[i] = myCommandArray[i];
+    }
+
+    job->cmdCount = ptrCount;
+
+
+    printf("In jobsConstructor count is: %d\n", ptrCount);
 
 }
 
@@ -330,8 +224,10 @@ int main(int argc, char *argv[])
 		// Read user input, and append \0 at the end.
 		fgets(userInput, MAX_INPUT, stdin);
 		char *lastCharPos;
+        int userInputLength;
 		if ((lastCharPos = strchr(userInput, '\n')) != NULL) {
 			*lastCharPos = '\0';
+            userInputLength = lastCharPos - userInput;
 		}
 		else {
 			perror("something goes wrong");
@@ -368,25 +264,27 @@ int main(int argc, char *argv[])
 
 
         // userInput is modified in this function.
-        jobsConstructor(userInput, myjobPtr);
-        printf("background: %d\n", myjobPtr->background); //1->false; 0->true
-        printf("first exec are: %s\n", myjobPtr->cmds[0].exec);
-        printf("frist filein are: %s\n", myjobPtr->cmds[0].fileIn);
-        printf("first fileout are: %s\n", myjobPtr->cmds[0].fileOut);
+        jobsConstructor(userInput, userInputLength, myjobPtr);
+        printf("In main function, background: %d\n", myjobPtr->background); //1->false; 0->true
+        printf("In main first exec are: %s\n", myjobPtr->cmds[0].exec);
+        printf("In main frist filein are: %s\n", myjobPtr->cmds[0].fileIn);
+        printf("In main first fileout are: %s\n", myjobPtr->cmds[0].fileOut);
         for (int i = 0; i < 5;i++) {
-            printf("first args: %s\n", myjobPtr->cmds[0].args[i]);
+            printf("In main first args: %s\n", myjobPtr->cmds[0].args[i]);
         }
 
-        printf("second exec are: %s\n", myjobPtr->cmds[1].exec);
-        printf("second filein are: %s\n", myjobPtr->cmds[1].fileIn);
-        printf("second fileout are: %s\n", myjobPtr->cmds[1].fileOut);
+        printf("In main second exec are: %s\n", myjobPtr->cmds[1].exec);
+        printf("In main second filein are: %s\n", myjobPtr->cmds[1].fileIn);
+        printf("In main second fileout are: %s\n", myjobPtr->cmds[1].fileOut);
         for (int i = 0; i < 5;i++) {
-            printf("second args: %s\n", myjobPtr->cmds[1].args[i]);
+            printf("In main second args: %s\n", myjobPtr->cmds[1].args[i]);
         }
 
 
 
-
+        for (int i = 0; i < ptrToFreeCount; i++) {
+            free(ptrToFree[i]);
+        }
 
 
 
