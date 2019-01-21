@@ -370,60 +370,53 @@ int main(int argc, char *argv[])
         int in, fd[2];
         in = 0;
         if (myjobPtr->cmdCount > 1) {
-            for (i = 0; i < (myjobPtr->cmdCount); i++) {
-                if (i != myjobPtr->cmdCount -1) {
-                    pipe(fd);
-                    printf("fd[0] is: %d \n", fd[0]);
-                    printf("fd[1] is: %d \n", fd[1]);
-                    if (fork() == 0) {
-                        //child
-                        if (in != 0) {
-                            dup2(in, 0);
-                            close(in);
-                        }
-                        if (fd[1] != 1) {
-                            dup2(fd[1], 1);
-                            close(fd[1]);
-                        }
-                        execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
-                    }
-                    close(fd[1]);
-                    in = fd[0];
-                }
-
-
-                if (i == myjobPtr->cmdCount -1) {
-                    printf("last stage of pipe \n");
+            for (i = 0; i < (myjobPtr->cmdCount -1); i++) {
+                pipe(fd);
+                printf("fd[0] is: %d \n", fd[0]);
+                printf("fd[1] is: %d \n", fd[1]);
+                if (fork() == 0) {
+                    //child
                     if (in != 0) {
-                        printf("in is: %d \n", in);
                         dup2(in, 0);
+                        close(in);
                     }
-                    printf("goes before last execvp\n");
-                    // execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
-                    pid_t pid = fork();
-                    int status;
-                    if (pid == 0) {
-                        execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
-                        fprintf(stderr,"Error: command not found\n");
-                        exit(1);
+                    if (fd[1] != 1) {
+                        dup2(fd[1], 1);
+                        close(fd[1]);
                     }
-                    else if (pid > 0) {
-                    	// parent
-                        printf("goes into parent\n");
-                    	waitpid(-1, &status, 0);
-                        dup2(saveStdout,STDOUT_FILENO);
-                        dup2(saveStdin,STDIN_FILENO);
-                        close(saveStdin);
-                        close(saveStdout);
-                    	fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
-                        continue;
-                    } else {
-                    	perror("fork");
-                    	exit(1);
-                    }
+                    execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
                 }
+                close(fd[1]);
+                in = fd[0];
+            }
 
-
+            printf("last stage of pipe \n");
+            if (in != 0) {
+                printf("in is: %d \n", in);
+                dup2(in, 0);
+            }
+            printf("goes before last execvp\n");
+            // execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
+            pid_t pid = fork();
+            int status;
+            if (pid == 0) {
+                execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
+                fprintf(stderr,"Error: command not found\n");
+                exit(1);
+            }
+            else if (pid > 0) {
+                // parent
+                printf("goes into parent\n");
+                while(wait(&status) > 0);
+                dup2(saveStdout,STDOUT_FILENO);
+                dup2(saveStdin,STDIN_FILENO);
+                close(saveStdin);
+                close(saveStdout);
+                fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
+                continue;
+            } else {
+                perror("fork");
+                exit(1);
             }
 
 
