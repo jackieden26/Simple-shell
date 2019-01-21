@@ -329,14 +329,13 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
-        //input redirection
+        //input redirection when no pipe.
         if (myjobPtr->cmdCount == 1) {
             if (myjobPtr->cmds[0].lessExist && myjobPtr->cmds[0].fileIn == NULL) {
                 fprintf(stderr,"Error: no input file\n");
                 continue;
             }
             else if (myjobPtr->cmds[0].lessExist && myjobPtr->cmds[0].fileIn) {
-                printf("Goes to fileIn \n");
                 int fileInDes = open(myjobPtr->cmds[0].fileIn, O_RDWR);
                 if (fileInDes < 0) {
                     fprintf(stderr, "Error: cannot open input file\n");
@@ -368,38 +367,68 @@ int main(int argc, char *argv[])
         }
         //pipeline
         int i;
-        int fd[2];
+        int in, fd[2];
+        in = 0;
         if (myjobPtr->cmdCount > 1) {
-            for (i = 0; i < (myjobPtr->cmdCount - 1); i++) {
-
-                pipe(fd);
-                if (fork() != 0) {
-                    //parent
-                    // close(fd[0]);
-                    dup2(fd[1],STDOUT_FILENO);
+            for (i = 0; i < (myjobPtr->cmdCount); i++) {
+                if (i != myjobPtr->cmdCount -1) {
+                    pipe(fd);
+                    printf("fd[0] is: %d \n", fd[0]);
+                    printf("fd[1] is: %d \n", fd[1]);
+                    if (fork() == 0) {
+                        //child
+                        if (in != 0) {
+                            dup2(in, 0);
+                            close(in);
+                        }
+                        if (fd[1] != 1) {
+                            dup2(fd[1], 1);
+                            close(fd[1]);
+                        }
+                        execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
+                    }
                     close(fd[1]);
-                    //exec process1
-                    execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
+                    in = fd[0];
                 }
-                else {
-                    //child
-                    // close(fd[1]);
-                    dup2(fd[0],STDIN_FILENO);
-                    close(fd[0]);
-                    //exec process2
-                    // execvp(myjobPtr->cmds[i+1].exec, myjobPtr->cmds[i].args);
 
+
+                if (i == myjobPtr->cmdCount -1) {
+                    printf("last stage of pipe \n");
+                    if (in != 0) {
+                        printf("in is: %d \n", in);
+                        dup2(in, 0);
+                    }
+                    printf("goes before last execvp\n");
+                    // execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
+                    pid_t pid = fork();
+                    int status;
+                    if (pid == 0) {
+                        execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
+                        fprintf(stderr,"Error: command not found\n");
+                        exit(1);
+                    }
+                    else if (pid > 0) {
+                    	// parent
+                        printf("goes into parent\n");
+                    	waitpid(-1, &status, 0);
+                        dup2(saveStdout,STDOUT_FILENO);
+                        dup2(saveStdin,STDIN_FILENO);
+                        close(saveStdin);
+                        close(saveStdout);
+                    	fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
+                        continue;
+                    } else {
+                    	perror("fork");
+                    	exit(1);
+                    }
                 }
-                // execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
 
 
             }
-            if (i == (myjobPtr->cmdCount - 1)) {
-                execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
-            }
-            printf("finished tube\n");
-            continue;
+
+
         }
+
 
         pid = fork();
         if (pid == 0) {
