@@ -47,6 +47,8 @@ typedef struct {
     char *args[MAX_ARG + 1];
     char *fileIn;
     char *fileOut;
+    bool lessExist;
+    bool largerExist;
 } Command;
 
 typedef struct {
@@ -71,6 +73,8 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
     cmd->exec = NULL;
     cmd->fileIn = NULL;
     cmd->fileOut = NULL;
+    cmd->lessExist = false;
+    cmd->largerExist = false;
     for (int i = 0; i < MAX_ARG + 1; i++) {
         cmd->args[i] = NULL;
     }
@@ -110,14 +114,6 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
         }
     }
 
-    // printf("after copy userinput is %s\n",cmdStrC);
-    //if only one element in userInput = if no whitespace in strings
-
-    // if (strstr(cmdStrC," ") == NULL) {
-    //     cmd->exec = cmdStrC;
-    //     cmd->args[0] = cmdStrC;
-    //     return;
-    // }
     cmdStrC[j] = '\0';
 
     // Stroke input by whitespace.
@@ -144,12 +140,18 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
             j++;
         }
         else if (strcmp(cmdArray[i],"<") == 0) {
+            cmd->lessExist = true;
             i += 1;
-            cmd->fileIn = cmdArray[i];
+            if (i != length) {
+                cmd->fileIn = cmdArray[i];
+            }
         }
         else if (strcmp(cmdArray[i],">") == 0) {
+            cmd->largerExist = true;
             i += 1;
-            cmd->fileOut = cmdArray[i];
+            if (i != length) {
+                cmd->fileOut = cmdArray[i];
+            }
         }
         else {
             cmd->args[j] = cmdArray[i];
@@ -202,11 +204,6 @@ void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
     }
 
     job->cmdCount = ptrCount;
-
-
-
-    // printf("In jobsConstructor count is: %d\n", ptrCount);
-
 }
 
 
@@ -230,15 +227,22 @@ int main(int argc, char *argv[])
 
 		// struct Input user_input;
 		// struct Cmd command;
-
-
-		//char *path;
 		//int fd;
-
+        int saveStdout = dup(STDOUT_FILENO);
+        int saveStdin = dup(STDIN_FILENO);
 		printf("sshell$ ");
 
 		// Read user input, and append \0 at the end.
 		fgets(userInput, MAX_INPUT, stdin);
+
+        //for testing purpose
+        /* Print command line if we're not getting stdin from the
+		 * terminal */
+		if (!isatty(STDIN_FILENO)) {
+			printf("%s", userInput);
+			fflush(stdout);
+		}
+
 		char *lastCharPos;
         int userInputLength;
 		if ((lastCharPos = strchr(userInput, '\n')) != NULL) {
@@ -246,33 +250,21 @@ int main(int argc, char *argv[])
             userInputLength = lastCharPos - userInput;
 		}
 		else {
-			perror("something goes wrong");
+			perror("something goes wrong\n");
 		}
+
+        // Check if userInput is only spaces and tabs.
+         int spaceTabCount = 0;
+         for (int i = 0; i < userInputLength; i++) {
+             if (userInput[i] == ' ' || userInput[i] == '\t') {
+                 spaceTabCount++;
+             }
+         }
+         if (spaceTabCount == userInputLength) {
+             continue;
+         }
+
 		strcpy(userInputCopy, userInput);
-		// int strLength = strlen(userInput);
-
-		// char *includeFileIn = strstr(userInput, "<");
-		// char *includeFileOut = strstr(userInput, ">");
-		// char *includePipe = strstr(userInput, "|");
-
-		// // Simple case: no file redirection or pipe.
-		// if (includeFileIn == NULL || includeFileOut == NULL || includePipe == NULL) {
-		// 	//print exit
-		// 	if (strcmp(userInput, "exit") == 0) {
-		// 		fprintf(stderr, "Bye...\n");
-		// 		exit(0);
-		// 	}
-		//
-		// 	// Print pwd.
-		// 	// Todo: WEXITSTATUS[status] is always 127
-		// 	else if ((strcmp(userInput, "pwd") == 0)) {
-		//
-		// 		getcwd(buf,sizeof(buf));
-		// 		fprintf(stderr,"%s\n",buf);
-		// 		fprintf(stderr, "+ completed '%s' [0]\n", userInputCopy);
-		// 		continue;
-		// 	}
-		// }
 
         // Jobs *myjobPtr, myjob;
         // myjobPtr = &myjob;
@@ -281,7 +273,7 @@ int main(int argc, char *argv[])
 
         // userInput is modified in this function.
         jobsConstructor(userInput, userInputLength, myjobPtr);
-        // printf("In main function, background: %d\n", myjobPtr->background); //1->false; 0->true
+        // printf("In main function, background: %d\n", myjobPtr->background); //0->false; 1->true
         // printf("In main first exec are: %s\n", myjobPtr->cmds[0].exec);
         // printf("In main frist filein are: %s\n", myjobPtr->cmds[0].fileIn);
         // printf("In main first fileout are: %s\n", myjobPtr->cmds[0].fileOut);
@@ -301,6 +293,7 @@ int main(int argc, char *argv[])
         // Error: invalid command line
 
         int args_size = 0;
+
         for (int i = 0; i < MAX_ARG;i++) {
             if (myjobPtr->cmds[0].args[i] == NULL) {
                 break;
@@ -323,7 +316,7 @@ int main(int argc, char *argv[])
         // Print pwd.
         else if ((strcmp(myjobPtr->cmds[0].exec, "pwd") == 0)) {
             getcwd(buf,sizeof(buf));
-            fprintf(stderr,"%s\n",buf);
+            printf("%s\n",buf);
             fprintf(stderr, "+ completed '%s' [0]\n", userInputCopy);
             continue;
         }
@@ -350,10 +343,50 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
+        //input redirection
+        if (myjobPtr->cmdCount == 1) {
+            if (myjobPtr->cmds[0].lessExist && myjobPtr->cmds[0].fileIn == NULL) {
+                fprintf(stderr,"Error: no input file\n");
+                continue;
+            }
+            else if (myjobPtr->cmds[0].lessExist && myjobPtr->cmds[0].fileIn) {
+                printf("Goes to fileIn \n");
+                int fileInDes = open(myjobPtr->cmds[0].fileIn, O_RDWR);
+                if (fileInDes < 0) {
+                    fprintf(stderr, "Error: cannot open input file\n");
+                    continue;
+                }
+                dup2(fileInDes, STDIN_FILENO);
+                close(fileInDes);
+            }
+        }
+
+
+        //output redirection
+        //if file redirection exists
+        if ((myjobPtr->cmds[0].largerExist == 1) && (myjobPtr->cmdCount == 1)) {
+            // printf("fileout %s\n",myjobPtr->cmds[0].fileOut );
+            if ((myjobPtr->cmds[0].largerExist == 1) && (myjobPtr->cmds[0].fileOut == NULL)) {
+                fprintf(stderr,"Error: no output file\n");
+                continue;
+            }
+            int fd = open(myjobPtr->cmds[0].fileOut, O_WRONLY | O_CREAT, 0777);
+            if (fd < 0) {
+                fprintf(stderr,"Error: cannot open output file\n");
+                continue;
+            }
+            if (fd) {
+                dup2(fd,STDOUT_FILENO);
+                close(fd);
+            }
+
+        }
+
+
         pid = fork();
         if (pid == 0) {
         	// child
-            printf("exec are: %s\n",myjobPtr->cmds[0].exec);
+            // printf("exec are: %s\n",myjobPtr->cmds[0].exec);
             execvp(myjobPtr->cmds[0].exec, myjobPtr->cmds[0].args);
 
             fprintf(stderr,"Error: command not found\n");
@@ -363,6 +396,10 @@ int main(int argc, char *argv[])
         	// parent
         	waitpid(-1, &status, 0);
         	fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
+            dup2(saveStdout,STDOUT_FILENO);
+            dup2(saveStdin,STDIN_FILENO);
+            close(saveStdin);
+            close(saveStdout);
         } else {
         	perror("fork");
         	exit(1);
@@ -372,214 +409,9 @@ int main(int argc, char *argv[])
         for (int i = 0; i < ptrToFreeCount; i++) {
             free(ptrToFree[i]);
             ptrToFree[i] = NULL;
+            ptrToFreeCount = 0;
         }
         free(myjobPtr);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-		//
-		// while(index < strLength) {
-		// 	if (userInput[index] == ' ' || userInput[index] == '\t') {
-		// 		userInput[index] = '\0';
-		// 	}
-		// 	index++;
-		// }
-		//
-		// index = 0;
-		// while(index < strLength) {
-		// 	while (userInput[index] == '\0' && index < strLength) {
-		// 		index++;
-		// 	}
-		// 	if (index >= strLength) {
-		// 		break;
-		// 	}
-		// 	target[wordIndex] = userInput + index;
-		// 	wordIndex++;
-		// 	while (userInput[index] != '\0' && index < strLength) {
-		// 		index++;
-		// 	}
-		// }
-		// target[wordIndex] = NULL;
-		//
-		// //put userinput into struct
-		// for (i = 0; i < strlen(userInputCopy); i++) {
-		// 	if (strcmp(userInputCopy[i],"|")==0) {
-		//
-		// 	}
-		// }
-		//
-		// //fprintf(stderr,"target %c\n",userInput[strlen(userInput)-1]);
-		//
-		// //tokenize userinput and store in array (an array of strings)
-		//
-		// if (strstr(userInputCopy,"<") != NULL) {
-		// 	string = "<";
-		// }
-		// else if (strstr(userInputCopy,">") != NULL) {
-		// 	string = ">";
-		// }
-		//
-		// i = 0;
-		// count= 0;
-		// char *p = strtok (userInputCopy, string);
-		//
-		// while (p != NULL) {
-		// 	array[i++] = p;
-		// 	p = strtok (NULL, string);
-		// 	count++;
-		// }
-		//
-		//
-		// //printf("count %d\n",count);
-		// /*
-		// //input redirection
-		// if ((count == 1) && (strcmp("<",string) == 0)) {
-		// 	fprintf(stderr,"Error: no input file\n");
-		// 	continue;
-		// }
-		//
-		//
-		// else if (strcmp("<",string) == 0) {
-		// 	for (i = 0;i<count;i++) {
-		// 		if (i==(count-1)) {
-		// 			getcwd(buf,sizeof(buf));
-		// 			path = malloc(strlen(buf)+strlen(array[i])+2);
-		// 			path[0] = '\0';
-		// 			strcat(path,buf);
-		// 			strcat(path,"/");
-		// 			strcat(path,array[i]);
-		// 			//printf("%s \n",path);
-		// 			fd = open(path,O_RDWR);
-		// 			if (fd<0) {
-		// 				fprintf(stderr,"Error: cannot open input file\n");
-		// 				break;
-		// 			}
-		// 			dup2(fd,STDIN_FILENO);
-		// 			close(fd);
-		// 			waitpid(-1, &status, 0);
-		// 			fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
-		// 			//if array[i] exist in current directory
-		//
-		// 		}
-		// 	}
-		// 	continue;
-		// }
-		// */
-		//
-		// //printf("%s\n",string);
-		//
-		// //print cd
-		// else if ((strcmp(*target, "cd") == 0)) {
-		// 	getcwd(buf,sizeof(buf));
-		// 	strcpy(pre_cd,buf);
-		// 	//cd .. or cd .
-		// 	if ((userInputCopy[strlen(userInputCopy)-1]) == '.') {
-		// 		if ((userInputCopy[strlen(userInputCopy)-2]) == '.') {
-		// 			chdir("..");
-		// 		}
-		// 		continue;
-		// 	}
-		// 	//cd filename
-		// 	for (i = 0;i<count;i++) {
-		// 		if (i==(count-1)) {
-		// 			if (chdir( array[i] ) == 0){
-		// 				break;
-		// 			}
-		// 			else {
-		// 				fprintf(stderr,"Error: no such directory\n");
-		// 			}
-		// 		}
-		// 	}
-		// 	waitpid(-1, &status, 0);
-		// 	fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
-		// 	continue;
-		// }
-		//
-		//
-		// pid = fork();
-		// if (pid == 0) {
-		// 	// child
-		// 	execvp(target[0], target);
-		// 	perror("execvp");
-		//
-		// } else if (pid > 0) {
-		// 	// parent
-		// 	waitpid(-1, &status, 0);
-		// 	fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
-		// } else {
-		// 	perror("fork");
-		// 	exit(1);
-		//
-		// }
 	}
 }
-
-/*
-char *tokenize(int *count, char userInputCopy[]) {
-	int i = 0;
-	count= 0;
-	char *p = strtok (userInputCopy, " ");
-
-	while (p != NULL) {
-		array[i++] = p;
-		p = strtok (NULL, " ");
-		count++;
-	}
-	return
-}
-*/
-/*
-sshell$ &
-Error: invalid command line
-Set flag in jobsConstructor
-
-sshell$ toto
-Error: command not found
-+ completed 'toto' [1]
-After execvp
-
-sshell$ cd toto
-Error: no such directory
-
-
-sshell$ grep toto < tata
-Error: cannot open input file
-
-sshell$ cat <
-Error: no input file
-
-sshell$ echo hack > /etc/passwd
-Error: cannot open output file
-
-sshell$ echo >
-Error: no output file
-
-sshell$ cat file | grep toto < file
-Error: mislocated input redirection
-
-sshell$ echo Hello world! > file | cat file
-Error: mislocated output redirection
-
-sshell$ echo > file & | grep toto
-Error: mislocated background sign
-
-sshell$ exit
-Error: active jobs still running
-+ completed 'exit' [1]
-*/
