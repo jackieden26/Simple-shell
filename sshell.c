@@ -354,28 +354,42 @@ int main(int argc, char *argv[])
                 fprintf(stderr,"Error: no output file\n");
                 continue;
             }
-            int fd = open(myjobPtr->cmds[0].fileOut, O_WRONLY | O_CREAT, 0777);
-            if (fd < 0) {
+            int fileOutDes = open(myjobPtr->cmds[0].fileOut, O_WRONLY | O_CREAT, 0777);
+            if (fileOutDes < 0) {
                 fprintf(stderr,"Error: cannot open output file\n");
                 continue;
             }
-            if (fd) {
-                dup2(fd,STDOUT_FILENO);
-                close(fd);
+            if (fileOutDes) {
+                dup2(fileOutDes,STDOUT_FILENO);
+                close(fileOutDes);
             }
 
         }
         //pipeline
-        int i;
+
         int in, fd[2];
         in = 0;
+        bool error = false;
+        int exit_status[MAX_ARG];
         if (myjobPtr->cmdCount > 1) {
-            for (i = 0; i < (myjobPtr->cmdCount -1); i++) {
+            for (int i = 0; i < (myjobPtr->cmdCount -1); i++) {
+                if (i == 0) {
+                    if (myjobPtr->cmds[i].largerExist == 1) {
+                        fprintf(stderr,"Error: mislocated output redirection\n");
+                        error = true;
+                        continue;
+                    }
+                }
                 pipe(fd);
-                printf("fd[0] is: %d \n", fd[0]);
-                printf("fd[1] is: %d \n", fd[1]);
+                // printf("fd[0] is: %d \n", fd[0]);
+                // printf("fd[1] is: %d \n", fd[1]);
                 if (fork() == 0) {
                     //child
+                    if ((i == 0) && (myjobPtr->cmds[i].lessExist == 1)) {
+                        int fileInDes = open(myjobPtr->cmds[i].fileIn, O_RDWR);
+                        dup2(fileInDes, STDIN_FILENO);
+                        close(fileInDes);
+                    }
                     if (in != 0) {
                         dup2(in, 0);
                         close(in);
@@ -385,40 +399,51 @@ int main(int argc, char *argv[])
                         close(fd[1]);
                     }
                     execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
+
+
                 }
+                exit_status[i] = WEXITSTATUS(status);
+
                 close(fd[1]);
                 in = fd[0];
             }
 
-            printf("last stage of pipe \n");
-            if (in != 0) {
-                printf("in is: %d \n", in);
-                dup2(in, 0);
+            if (error == 1) {
+                continue;
             }
-            printf("goes before last execvp\n");
-            // execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
+
             pid_t pid = fork();
             int status;
             if (pid == 0) {
+                if (myjobPtr->cmds[myjobPtr->cmdCount-1].largerExist == 1) {
+                    int fileOutDes = open(myjobPtr->cmds[myjobPtr->cmdCount-1].fileOut, O_WRONLY | O_CREAT, 0777);
+                    dup2(fileOutDes,STDOUT_FILENO);
+                    close(fileOutDes);
+                }
+                if (in != 0) {
+                    if (myjobPtr->cmds[myjobPtr->cmdCount-1].lessExist == 1) {
+                        fprintf(stderr,"Error: mislocated input redirection\n");
+                        continue;
+                    }
+                    dup2(in, 0);
+                }
                 execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
-                fprintf(stderr,"Error: command not found\n");
                 exit(1);
             }
             else if (pid > 0) {
                 // parent
-                printf("goes into parent\n");
                 while(wait(&status) > 0);
-                dup2(saveStdout,STDOUT_FILENO);
-                dup2(saveStdin,STDIN_FILENO);
-                close(saveStdin);
-                close(saveStdout);
-                fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
+                exit_status[myjobPtr->cmdCount-1] = WEXITSTATUS(status);
+                fprintf(stderr, "+ completed '%s' ", userInputCopy);
+                for (int i = 0; i < myjobPtr->cmdCount; i++) {
+                    fprintf(stderr, "[%d]", exit_status[i]);
+                }
+                fprintf(stderr, "\n");
                 continue;
             } else {
                 perror("fork");
                 exit(1);
             }
-
 
         }
 
@@ -428,7 +453,7 @@ int main(int argc, char *argv[])
         	// child
             // printf("exec are: %s\n",myjobPtr->cmds[0].exec);
             execvp(myjobPtr->cmds[0].exec, myjobPtr->cmds[0].args);
-
+            // perror("execvp");
             fprintf(stderr,"Error: command not found\n");
             exit(1);
 
