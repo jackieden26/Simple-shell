@@ -49,6 +49,9 @@ typedef struct {
     char *fileOut;
     bool lessExist;
     bool largerExist;
+    bool andExist;
+    bool andValid;
+    int argCount;
 } Command;
 
 typedef struct {
@@ -75,6 +78,9 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
     cmd->fileOut = NULL;
     cmd->lessExist = false;
     cmd->largerExist = false;
+    cmd->andExist = false;
+    cmd->andValid = false;
+    cmd->argCount = 0;
     for (int i = 0; i < MAX_ARG + 1; i++) {
         cmd->args[i] = NULL;
     }
@@ -153,12 +159,22 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
                 cmd->fileOut = cmdArray[i];
             }
         }
+        //only check if and is the last arguments in one command;
+        //doesn't check for multiple command;
+        else if (strcmp(cmdArray[i],"&") == 0) {
+            cmd->andExist = true;
+            if (i == length -1) {
+                cmd->andValid = true;
+            }
+        }
         else {
             cmd->args[j] = cmdArray[i];
-            // printf("cmdArray[i] is: %s\n", cmdArray[i]);
+            cmd->argCount++;
             j++;
         }
     }
+
+
     // printf("prints in commandConstructor function\n");
     // printf("first exec are: %s\n", cmd->exec);
     // printf("filein are: %s\n", cmd->fileIn);
@@ -278,18 +294,9 @@ int main(int argc, char *argv[])
         //     printf("In main second args: %s\n", myjobPtr->cmds[1].args[i]);
         // }
 
-        int args_size = 0;
 
-        for (int i = 0; i < MAX_ARG;i++) {
-            if (myjobPtr->cmds[0].args[i] == NULL) {
-                break;
-            }
-            else {
-                args_size ++;
-            }
-        }
-
-        if ((myjobPtr->background == 1) && (args_size < 2)) {
+        // Check if & is the only argument and the only command;
+        if ((myjobPtr->background == 1) && (myjobPtr->cmds[0].argCount < 1)) {
             fprintf(stderr,"Error: invalid command line\n");
             continue;
         }
@@ -324,12 +331,38 @@ int main(int argc, char *argv[])
 				fprintf(stderr,"Error: no such directory\n");
 			}
 
-			//waitpid(-1, &status, 0);
 			fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
 			continue;
 		}
 
-        //input redirection when no pipe.
+        // Handle background.
+        bool mislocated_sign = false;
+        if (myjobPtr->background == 1) {
+            //handle mislocated background sign
+            for (int i = 0; i < myjobPtr->cmdCount; i++) {
+                if (i < myjobPtr->cmdCount -1) {
+                    if (myjobPtr->cmds[i].andValid == 1) {
+                        myjobPtr->cmds[i].andValid = false;
+                    }
+                }
+                else {
+                    if (myjobPtr->cmds[i].andValid == 0) {
+                        fprintf(stderr,"Error: mislocated background sign\n");
+                        mislocated_sign = true;
+
+                    }
+                }
+            }
+            if (mislocated_sign == 1) {
+                continue;
+            }
+
+            //background construction
+            // pid_t pid2;
+            // while (waitpid() > 0)
+        }
+
+        // Input redirection when no pipe.
         if (myjobPtr->cmdCount == 1) {
             if (myjobPtr->cmds[0].lessExist && myjobPtr->cmds[0].fileIn == NULL) {
                 fprintf(stderr,"Error: no input file\n");
@@ -341,55 +374,81 @@ int main(int argc, char *argv[])
                     fprintf(stderr, "Error: cannot open input file\n");
                     continue;
                 }
-                dup2(fileInDes, STDIN_FILENO);
-                close(fileInDes);
+                else {
+                    dup2(fileInDes, STDIN_FILENO);
+                    close(fileInDes);
+                }
             }
         }
 
-        //output redirection
-        //if file redirection exists
-        if ((myjobPtr->cmds[0].largerExist == 1) && (myjobPtr->cmdCount == 1)) {
-            // printf("fileout %s\n",myjobPtr->cmds[0].fileOut );
-            if ((myjobPtr->cmds[0].largerExist == 1) && (myjobPtr->cmds[0].fileOut == NULL)) {
+        // Output redirection when no pipe.
+        if (myjobPtr->cmdCount == 1) {
+            if (myjobPtr->cmds[0].largerExist == 1 && myjobPtr->cmds[0].fileOut == NULL) {
                 fprintf(stderr,"Error: no output file\n");
                 continue;
             }
-            int fileOutDes = open(myjobPtr->cmds[0].fileOut, O_WRONLY | O_CREAT, 0777);
-            if (fileOutDes < 0) {
-                fprintf(stderr,"Error: cannot open output file\n");
-                continue;
+            else if (myjobPtr->cmds[0].largerExist == 1 && myjobPtr->cmds[0].fileOut){
+                int fileOutDes = open(myjobPtr->cmds[0].fileOut, O_WRONLY | O_CREAT, 0777);
+                if (fileOutDes < 0) {
+                    fprintf(stderr,"Error: cannot open output file\n");
+                    continue;
+                }
+                else {
+                    dup2(fileOutDes,STDOUT_FILENO);
+                    close(fileOutDes);
+                }
             }
-            if (fileOutDes) {
-                dup2(fileOutDes,STDOUT_FILENO);
-                close(fileOutDes);
-            }
-
         }
-        //pipeline
 
+        //pipeline
+        // https://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
         int in, fd[2];
         in = 0;
         bool error = false;
         int exit_status[MAX_ARG];
         if (myjobPtr->cmdCount > 1) {
             for (int i = 0; i < (myjobPtr->cmdCount -1); i++) {
-                if (i == 0) {
-                    if (myjobPtr->cmds[i].largerExist == 1) {
-                        fprintf(stderr,"Error: mislocated output redirection\n");
-                        error = true;
-                        continue;
-                    }
+                // Check if output redirect only exists in last command.
+                if (myjobPtr->cmds[i].largerExist == 1) {
+                    fprintf(stderr,"Error: mislocated output redirection\n");
+                    error = true;
+                    break;
                 }
+
+                // Check if input redirect wrongly exists in middle commands.
+                if (myjobPtr->cmds[i].lessExist == 1 && i != 0) {
+                    fprintf(stderr,"Error: mislocated input redirection\n");
+                    error = true;
+                    break;
+                }
+
+                // Connect pipe.
                 pipe(fd);
-                // printf("fd[0] is: %d \n", fd[0]);
-                // printf("fd[1] is: %d \n", fd[1]);
                 if (fork() == 0) {
                     //child
-                    if ((i == 0) && (myjobPtr->cmds[i].lessExist == 1)) {
-                        int fileInDes = open(myjobPtr->cmds[i].fileIn, O_RDWR);
-                        dup2(fileInDes, STDIN_FILENO);
-                        close(fileInDes);
+
+                    // Open first command's input redirect file.
+                    if (i == 0 && myjobPtr->cmds[i].lessExist) {
+                        if (myjobPtr->cmds[0].fileIn == NULL) {
+                            fprintf(stderr,"Error: no input file\n");
+                            error = true;
+                            break;
+                        }
+                        else {
+                            int fileInDes = open(myjobPtr->cmds[0].fileIn, O_RDWR);
+                            if (fileInDes < 0) {
+                                fprintf(stderr, "Error: cannot open input file\n");
+                                error = true;
+                                break;
+                            }
+                            else {
+                                int fileInDes = open(myjobPtr->cmds[i].fileIn, O_RDWR);
+                                dup2(fileInDes, STDIN_FILENO);
+                                close(fileInDes);
+                            }
+                        }
                     }
+
                     if (in != 0) {
                         dup2(in, 0);
                         close(in);
@@ -399,28 +458,42 @@ int main(int argc, char *argv[])
                         close(fd[1]);
                     }
                     execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
-
-
                 }
+                waitpid(-1, &status, 0);
                 exit_status[i] = WEXITSTATUS(status);
 
                 close(fd[1]);
                 in = fd[0];
             }
 
-            if (error == 1) {
+            if (error) {
                 continue;
             }
 
             pid_t pid = fork();
-            int status;
             if (pid == 0) {
+
+                // Open last command's output redirect file.
                 if (myjobPtr->cmds[myjobPtr->cmdCount-1].largerExist == 1) {
-                    int fileOutDes = open(myjobPtr->cmds[myjobPtr->cmdCount-1].fileOut, O_WRONLY | O_CREAT, 0777);
-                    dup2(fileOutDes,STDOUT_FILENO);
-                    close(fileOutDes);
+                    if (myjobPtr->cmds[myjobPtr->cmdCount-1].fileOut == NULL) {
+                        fprintf(stderr,"Error: no out file\n");
+                        continue;
+                    }
+                    else {
+                        int fileOutDes = open(myjobPtr->cmds[myjobPtr->cmdCount-1].fileOut, O_WRONLY | O_CREAT, 0777);
+                        if (fileOutDes < 0) {
+                            fprintf(stderr, "Error: cannot open output file\n");
+                            continue;
+                        }
+                        else {
+                            dup2(fileOutDes,STDOUT_FILENO);
+                            close(fileOutDes);
+                        }
+                    }
                 }
+
                 if (in != 0) {
+                    // Check if input redirect wrongly exists in the last command.
                     if (myjobPtr->cmds[myjobPtr->cmdCount-1].lessExist == 1) {
                         fprintf(stderr,"Error: mislocated input redirection\n");
                         continue;
