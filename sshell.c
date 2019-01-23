@@ -57,6 +57,7 @@ typedef struct {
 } Command;
 
 typedef struct {
+    // background is true as long as there exists '&' in userInput.
     bool background;
     int cmdCount;
     Command cmds[MAX_INPUT];
@@ -80,9 +81,9 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
     cmd->fileOut = NULL;
     cmd->lessExist = false;
     cmd->largerExist = false;
-    cmd->andExist = false;
     cmd->andValid = false;
     cmd->argCount = 0;
+    cmd->andCount = 0;
     for (int i = 0; i < MAX_ARG + 1; i++) {
         cmd->args[i] = NULL;
     }
@@ -161,11 +162,9 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
                 cmd->fileOut = cmdArray[i];
             }
         }
-        //only check if and is the last arguments in one command;
-        //doesn't check for multiple command;
         else if (strcmp(cmdArray[i],"&") == 0) {
-            cmd->andExist = true;
-            if (i == length -1) {
+            cmd->andCount++;
+            if (i == length -1 && cmd->andCount == 1) {
                 cmd->andValid = true;
             }
         }
@@ -224,21 +223,21 @@ void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
     job->cmdCount = ptrCount;
 }
 
-void checkBgComplete(int *SjobCount, int *jobPid, int *jobStatus, char *jobInput[MAX_BACKJOB]) {
+void checkBgComplete(int *jobCount, int *jobPid, int *jobStatus, char *jobInput[MAX_BACKJOB]) {
     //check if any background job complete
-    for (int i = 0; i < jobCount; i++) {
+    for (int i = 0; i < *jobCount; i++) {
         if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
             fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(jobStatus[i]));
 
             // Take the completed job out of the array and shift the array accordingly.
             free(jobInput[i]);
-            for (int j = i; j < jobCount; j++) {
+            for (int j = i; j < *jobCount; j++) {
                 jobInput[j] = jobInput[j + 1];
                 jobPid[j] = jobPid[j + 1];
                 jobStatus[j] = jobStatus[j + 1];
             }
             i--;
-            jobCount--;
+            (*jobCount)--;
         }
     }
 }
@@ -260,9 +259,6 @@ int main(int argc, char *argv[])
 		char pre_cd[256];
         int saveStdout = dup(STDOUT_FILENO);
         int saveStdin = dup(STDIN_FILENO);
-
-        Jobs *myjobPtr, myjob;
-        myjobPtr = &myjob;
 
         printf("sshell$ ");
 		// Read user input, and append \0 at the end.
@@ -312,7 +308,7 @@ int main(int argc, char *argv[])
             //         jobCount--;
             //     }
             // }
-            checkBgComplete(&jobCount, jobPid, jobStatus, jobInput[MAX_BACKJOB]);
+            checkBgComplete(&jobCount, jobPid, jobStatus, jobInput);
             continue;
         }
 
@@ -321,7 +317,8 @@ int main(int argc, char *argv[])
 
         // Jobs *myjobPtr = malloc(sizeof(Jobs));
 
-
+        Jobs *myjobPtr, myjob;
+        myjobPtr = &myjob;
         // userInput is modified in this function.
         jobsConstructor(userInput, userInputLength, myjobPtr);
 
@@ -347,8 +344,8 @@ int main(int argc, char *argv[])
         // }
 
 
-        // Check if & is the only argument and the only command;
-        if ((myjobPtr->background == 1) && (myjobPtr->cmds[0].argCount < 1)) {
+        // Check if & is the only argument and there is only one command in job.
+        if ((myjobPtr->background == 1) && (myjobPtr->cmds[0].argCount < 1) && (myjobPtr->cmdCount == 1)) {
             fprintf(stderr,"Error: invalid command line\n");
             continue;
         }
@@ -388,28 +385,28 @@ int main(int argc, char *argv[])
 		}
 
         // Handle background.
-        bool mislocated_sign = false;
+        bool mislocatedSign = false;
         if (myjobPtr->background == 1) {
-            //handle mislocated background sign
+        //handle mislocated background sign
             for (int i = 0; i < myjobPtr->cmdCount; i++) {
                 if (i < myjobPtr->cmdCount -1) {
-                    if (myjobPtr->cmds[i].andValid == 1) {
-                        myjobPtr->cmds[i].andValid = false;
+                    if (myjobPtr->cmds[i].andCount > 0) {
+                        fprintf(stderr,"Error: mislocated background sign\n");
+                        mislocatedSign = true;
+                        break;
                     }
                 }
                 else {
-                    if (myjobPtr->cmds[i].andValid == 0) {
+                    if (myjobPtr->cmds[i].andValid == false) {
                         fprintf(stderr,"Error: mislocated background sign\n");
-                        mislocated_sign = true;
-
+                        mislocatedSign = true;
+                        break;
                     }
                 }
             }
-            if (mislocated_sign == 1) {
+            if (mislocatedSign) {
                 continue;
             }
-            ///something ....................
-
         }
 
         // Input redirection when no pipe.
@@ -599,42 +596,44 @@ int main(int argc, char *argv[])
                 jobCount++;
 
                 // Check whether some background job complete.
-                for (int i = 0; i < jobCount; i++) {
-                    if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
-                        fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(jobStatus[i]));
-
-                        // Take the completed job out of the array and shift the array accordingly.
-                        free(jobInput[i]);
-                        for (int j = i; j < jobCount; j++) {
-                            jobInput[j] = jobInput[j + 1];
-                            jobPid[j] = jobPid[j + 1];
-                            jobStatus[j] = jobStatus[j + 1];
-                        }
-                        i--;
-                        jobCount--;
-                    }
-                }
+                // for (int i = 0; i < jobCount; i++) {
+                //     if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
+                //         fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(jobStatus[i]));
+                //
+                //         // Take the completed job out of the array and shift the array accordingly.
+                //         free(jobInput[i]);
+                //         for (int j = i; j < jobCount; j++) {
+                //             jobInput[j] = jobInput[j + 1];
+                //             jobPid[j] = jobPid[j + 1];
+                //             jobStatus[j] = jobStatus[j + 1];
+                //         }
+                //         i--;
+                //         jobCount--;
+                //     }
+                // }
+                checkBgComplete(&jobCount, jobPid, jobStatus, jobInput);
             }
 
             // If current command has no '&'.
             if (myjobPtr->background == 0) {
                 waitpid(pid, &status, 0);
                 // Check whether some background job complete.
-                for (int i = 0; i < jobCount; i++) {
-                    if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
-                        fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(status));
-                        // Take the completed job out of the array and shift the array accordingly.
-                        free(jobInput[i]);
-                        for (int j = i; j < jobCount; j++) {
-                            jobInput[j] = jobInput[j + 1];
-                            jobPid[j] = jobPid[j + 1];
-                            jobStatus[j] = jobStatus[j + 1];
-                        }
-                        i--;
-                        jobCount--;
-                    }
-
-                }
+                // for (int i = 0; i < jobCount; i++) {
+                //     if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
+                //         fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(status));
+                //         // Take the completed job out of the array and shift the array accordingly.
+                //         free(jobInput[i]);
+                //         for (int j = i; j < jobCount; j++) {
+                //             jobInput[j] = jobInput[j + 1];
+                //             jobPid[j] = jobPid[j + 1];
+                //             jobStatus[j] = jobStatus[j + 1];
+                //         }
+                //         i--;
+                //         jobCount--;
+                //     }
+                //
+                // }
+                checkBgComplete(&jobCount, jobPid, jobStatus, jobInput);
                 fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
                 //We use parent process duing file redirection so we reset our stdin and stdout
                 dup2(saveStdout,STDOUT_FILENO);
