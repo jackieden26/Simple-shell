@@ -430,7 +430,7 @@ int main(int argc, char *argv[])
                             }
                         }
                     }
-
+                    // Connect pipe.
                     if (in != 0) {
                         dup2(in, 0);
                         close(in);
@@ -440,6 +440,9 @@ int main(int argc, char *argv[])
                         close(fd[1]);
                     }
                     execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
+                    fprintf(stderr,"Error: command not found\n");
+                    exit(1);
+
                 }
                 waitpid(-1, &status, 0);
                 exit_status[i] = WEXITSTATUS(status);
@@ -483,6 +486,7 @@ int main(int argc, char *argv[])
                     dup2(in, 0);
                 }
                 execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
+                fprintf(stderr,"Error: command not found\n");
                 exit(1);
             }
             else if (pid > 0) {
