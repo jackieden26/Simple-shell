@@ -10,6 +10,7 @@
 
 #define MAX_ARG 16
 #define MAX_INPUT 512
+#define MAX_BACKJOB 100
 
 int findMax(int x, int y) {
     if (x > y) {
@@ -49,9 +50,10 @@ typedef struct {
     char *fileOut;
     bool lessExist;
     bool largerExist;
-    bool andExist;
+    // andValid is true iff there is only one '&' at the end of command.
     bool andValid;
     int argCount;
+    int andCount;
 } Command;
 
 typedef struct {
@@ -222,10 +224,31 @@ void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
     job->cmdCount = ptrCount;
 }
 
+void checkBgComplete(int *SjobCount, int *jobPid, int *jobStatus, char *jobInput[MAX_BACKJOB]) {
+    //check if any background job complete
+    for (int i = 0; i < jobCount; i++) {
+        if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
+            fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(jobStatus[i]));
 
+            // Take the completed job out of the array and shift the array accordingly.
+            free(jobInput[i]);
+            for (int j = i; j < jobCount; j++) {
+                jobInput[j] = jobInput[j + 1];
+                jobPid[j] = jobPid[j + 1];
+                jobStatus[j] = jobStatus[j + 1];
+            }
+            i--;
+            jobCount--;
+        }
+    }
+}
 
 int main(int argc, char *argv[])
 {
+    int jobCount = 0;
+    int jobPid[MAX_BACKJOB];
+    int jobStatus[MAX_BACKJOB];
+    char *jobInput[MAX_BACKJOB];
 	while (1) {
 		// https://stackoverflow.com/questions/2693776/removing-trailing-newline-character-from-fgets-input
 		char userInput[MAX_INPUT];
@@ -237,8 +260,11 @@ int main(int argc, char *argv[])
 		char pre_cd[256];
         int saveStdout = dup(STDOUT_FILENO);
         int saveStdin = dup(STDIN_FILENO);
-		printf("sshell$ ");
 
+        Jobs *myjobPtr, myjob;
+        myjobPtr = &myjob;
+
+        printf("sshell$ ");
 		// Read user input, and append \0 at the end.
 		fgets(userInput, MAX_INPUT, stdin);
 
@@ -250,7 +276,7 @@ int main(int argc, char *argv[])
 		}
 
 		char *lastCharPos;
-        int userInputLength;
+        int userInputLength = 0;
 		if ((lastCharPos = strchr(userInput, '\n')) != NULL) {
 			*lastCharPos = '\0';
             userInputLength = lastCharPos - userInput;
@@ -260,25 +286,51 @@ int main(int argc, char *argv[])
 		}
 
         // Check if userInput is only spaces and tabs.
-         int spaceTabCount = 0;
-         for (int i = 0; i < userInputLength; i++) {
-             if (userInput[i] == ' ' || userInput[i] == '\t') {
-                 spaceTabCount++;
-             }
-         }
-         if (spaceTabCount == userInputLength) {
-             continue;
-         }
+        int spaceTabCount = 0;
+        for (int i = 0; i < userInputLength; i++) {
+            if (userInput[i] == ' ' || userInput[i] == '\t') {
+                spaceTabCount++;
+            }
+        }
+        if (spaceTabCount == userInputLength && jobCount == 0) {
+            continue;
+        }
+        if (spaceTabCount == userInputLength && jobCount != 0) {
+            // Check whether some background job complete.
+            // for (int i = 0; i < jobCount; i++) {
+            //     if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
+            //         fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(jobStatus[i]));
+            //
+            //         // Take the completed job out of the array and shift the array accordingly.
+            //         free(jobInput[i]);
+            //         for (int j = i; j < jobCount; j++) {
+            //             jobInput[j] = jobInput[j + 1];
+            //             jobPid[j] = jobPid[j + 1];
+            //             jobStatus[j] = jobStatus[j + 1];
+            //         }
+            //         i--;
+            //         jobCount--;
+            //     }
+            // }
+            checkBgComplete(&jobCount, jobPid, jobStatus, jobInput[MAX_BACKJOB]);
+            continue;
+        }
 
 		strcpy(userInputCopy, userInput);
 
-        Jobs *myjobPtr, myjob;
-        myjobPtr = &myjob;
+
         // Jobs *myjobPtr = malloc(sizeof(Jobs));
 
 
         // userInput is modified in this function.
         jobsConstructor(userInput, userInputLength, myjobPtr);
+
+
+        //check if backgruond jobs
+        //check if it completed it or cannot
+
+
+
         // printf("In main function, background: %d\n", myjobPtr->background); //0->false; 1->true
         // printf("In main first exec are: %s\n", myjobPtr->cmds[0].exec);
         // printf("In main frist filein are: %s\n", myjobPtr->cmds[0].fileIn);
@@ -301,7 +353,7 @@ int main(int argc, char *argv[])
             continue;
         }
         //print exit
-        if (strcmp(myjobPtr->cmds[0].exec, "exit") == 0) {
+        if (strcmp(myjobPtr->cmds[0].exec, "exit") == 0 && jobCount == 0) {
             fprintf(stderr, "Bye...\n");
             exit(0);
         }
@@ -356,10 +408,8 @@ int main(int argc, char *argv[])
             if (mislocated_sign == 1) {
                 continue;
             }
+            ///something ....................
 
-            //background construction
-            // pid_t pid2;
-            // while (waitpid() > 0)
         }
 
         // Input redirection when no pipe.
@@ -470,7 +520,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            pid_t pid = fork();
+            pid = fork();
             if (pid == 0) {
 
                 // Open last command's output redirect file.
@@ -524,21 +574,77 @@ int main(int argc, char *argv[])
         pid = fork();
         if (pid == 0) {
         	// child
-            // printf("exec are: %s\n",myjobPtr->cmds[0].exec);
+
+            if (strcmp(myjobPtr->cmds[0].exec,"exit") == 0 && jobCount != 0) {
+                fprintf(stderr,"Error: active jobs still running\n");
+                exit(1);
+            }
             execvp(myjobPtr->cmds[0].exec, myjobPtr->cmds[0].args);
-            // perror("execvp");
             fprintf(stderr,"Error: command not found\n");
             exit(1);
 
+
+
         } else if (pid > 0) {
         	// parent
-        	waitpid(-1, &status, 0);
-        	fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
-            dup2(saveStdout,STDOUT_FILENO);
-            dup2(saveStdin,STDIN_FILENO);
-            close(saveStdin);
-            close(saveStdout);
-        } else {
+            // Store current command background job into arrays.
+            if (myjobPtr->background) {
+                int strLength = strlen(userInputCopy);
+                jobInput[jobCount] = malloc((strLength + 1) * sizeof(char));
+                for (int i = 0; i < strLength + 1; i++) {
+                    jobInput[jobCount][i] = userInputCopy[i];
+                }
+                jobPid[jobCount] = pid;
+                jobStatus[jobCount] = status;
+                jobCount++;
+
+                // Check whether some background job complete.
+                for (int i = 0; i < jobCount; i++) {
+                    if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
+                        fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(jobStatus[i]));
+
+                        // Take the completed job out of the array and shift the array accordingly.
+                        free(jobInput[i]);
+                        for (int j = i; j < jobCount; j++) {
+                            jobInput[j] = jobInput[j + 1];
+                            jobPid[j] = jobPid[j + 1];
+                            jobStatus[j] = jobStatus[j + 1];
+                        }
+                        i--;
+                        jobCount--;
+                    }
+                }
+            }
+
+            // If current command has no '&'.
+            if (myjobPtr->background == 0) {
+                waitpid(pid, &status, 0);
+                // Check whether some background job complete.
+                for (int i = 0; i < jobCount; i++) {
+                    if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
+                        fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(status));
+                        // Take the completed job out of the array and shift the array accordingly.
+                        free(jobInput[i]);
+                        for (int j = i; j < jobCount; j++) {
+                            jobInput[j] = jobInput[j + 1];
+                            jobPid[j] = jobPid[j + 1];
+                            jobStatus[j] = jobStatus[j + 1];
+                        }
+                        i--;
+                        jobCount--;
+                    }
+
+                }
+                fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
+                //We use parent process duing file redirection so we reset our stdin and stdout
+                dup2(saveStdout,STDOUT_FILENO);
+                dup2(saveStdin,STDIN_FILENO);
+                close(saveStdin);
+                close(saveStdout);
+            }
+
+        }
+        else {
         	perror("fork");
         	exit(1);
 
