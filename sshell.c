@@ -278,15 +278,20 @@ int main(int argc, char *argv[])
 			if ((userInputCopy[strlen(userInputCopy)-1]) == '.') {
 				if ((userInputCopy[strlen(userInputCopy)-2]) == '.') {
 					chdir("..");
+                    fprintf(stderr, "+ completed '%s' [0]\n", userInputCopy);
 				}
 				continue;
 			}
 			// cd filename.
 			if (chdir(myjobPtr->cmds[0].args[1]) != 0){
 				fprintf(stderr,"Error: no such directory\n");
+                fprintf(stderr, "+ completed '%s' [1]\n", userInputCopy);
+                continue;
 			}
-			fprintf(stderr, "+ completed '%s' [%d]\n", userInputCopy, WEXITSTATUS(status));
-			continue;
+            else {
+                fprintf(stderr, "+ completed '%s' [0]\n", userInputCopy);
+                continue;
+            }
 		}
 
         // Handle background.
