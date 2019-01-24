@@ -212,8 +212,6 @@ int main(int argc, char *argv[])
         printf("sshell$ ");
 		fgets(userInput, MAX_INPUT, stdin);
 
-        /* Print command line if we're not getting stdin from the
-		 * terminal */
 		if (!isatty(STDIN_FILENO)) {
 			printf("%s", userInput);
 			fflush(stdout);
@@ -382,7 +380,6 @@ int main(int argc, char *argv[])
                 pipe(fd);
                 if (fork() == 0) {
                     // Child.
-
                     // Open first command's input redirect file.
                     if (i == 0 && myjobPtr->cmds[i].lessExist) {
                         if (myjobPtr->cmds[0].fileIn == NULL) {
@@ -416,7 +413,6 @@ int main(int argc, char *argv[])
                     execvp(myjobPtr->cmds[i].exec, myjobPtr->cmds[i].args);
                     fprintf(stderr,"Error: command not found\n");
                     exit(1);
-
                 }
                 // Parent.
                 waitpid(-1, &status, 0);
@@ -482,8 +478,7 @@ int main(int argc, char *argv[])
 
         pid = fork();
         if (pid == 0) {
-        	// child
-
+        	// Child.
             if (strcmp(myjobPtr->cmds[0].exec,"exit") == 0 && jobCount != 0) {
                 fprintf(stderr,"Error: active jobs still running\n");
                 exit(1);
@@ -491,11 +486,8 @@ int main(int argc, char *argv[])
             execvp(myjobPtr->cmds[0].exec, myjobPtr->cmds[0].args);
             fprintf(stderr,"Error: command not found\n");
             exit(1);
-
-
-
         } else if (pid > 0) {
-        	// parent
+        	// Parent.
             // Store current command background job into arrays.
             if (myjobPtr->background) {
                 int strLength = strlen(userInputCopy);
