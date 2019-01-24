@@ -149,9 +149,9 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
 void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
     // Initialize jobs property.
     job->background = false;
-    Command myCommandArray[ptrCount];
     // Count how many commands in userInput with multiple pipeline.
     int ptrCount = 1;
+    Command myCommandArray[ptrCount];
 
     char *startPtr[MAX_ARG];
     startPtr[0] = userInput;
