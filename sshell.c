@@ -12,37 +12,6 @@
 #define MAX_INPUT 512
 #define MAX_BACKJOB 100
 
-int findMax(int x, int y) {
-    if (x > y) {
-        return x;
-    }
-    else {
-        return y;
-    }
-}
-
-int findMin(int x, int y) {
-    if (x > y) {
-        return y;
-    }
-    else {
-        return x;
-    }
-}
-
-char* deblank(char* input) {
-    int i,j;
-    char *output = input;
-    for (i = 0, j = 0; i < strlen(input); i++, j++) {
-        if (input[i]!=' ')
-            output[j]=input[i];
-        else
-            j--;
-    }
-    output[j]=0;
-    return output;
-}
-
 typedef struct {
     char *exec;
     char *args[MAX_ARG + 1];
@@ -63,17 +32,21 @@ typedef struct {
     Command cmds[MAX_INPUT];
 } Jobs;
 
+/*
+ * This array record dynamically allocated strings for each commandConstructor.
+ * It is free and count is reset at the end of while loop.
+ */
 char *ptrToFree[MAX_ARG];
 int ptrToFreeCount = 0;
 
-// This function modifies cmdStr, by replacing whitespace and tab with '\0'
 void commandConstructor(char *cmdStr, int count, Command* cmd) {
     int strLength = strlen(cmdStr);
 
+    // Reserve one more byte at the end for '\0'.
     char *cmdStrC = malloc((strLength+1) * sizeof(char));
     ptrToFree[ptrToFreeCount++] = cmdStrC;
 
-    // Initialize every property to be NULL.
+    // Initialize every Command property.
     cmd->exec = NULL;
     cmd->fileIn = NULL;
     cmd->fileOut = NULL;
@@ -86,7 +59,10 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
         cmd->args[i] = NULL;
     }
 
-    // Formatting strings add one whitespace if there is none.
+    /*
+     * Format strings by seperate every token with exactly one space.
+     * j is the index for cmdStrC, which would be the formatted result.
+     */
     int j = 0;
     for (int i = 0; i < strLength; i++) {
         if ((i == 0) && (cmdStr[i] == ' ' || cmdStr[i] == '\t')) {
@@ -101,7 +77,6 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
                 i++;
             }
     	}
-
         else if (cmdStr[i] == '<' || cmdStr[i] == '>' || cmdStr[i] == '&') {
             if (cmdStr[i-1] != ' ') {
                 cmdStrC[j] = ' ';
@@ -120,16 +95,16 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
         }
     }
 
+    // Set the one last char to '\0' to indicate the end of string.
     cmdStrC[j] = '\0';
 
-    // Stroke input by whitespace.
+    // Strtok input by whitespace.
     int i = 0;
     int length = 0;
     char *split = strtok(cmdStrC, " ");
     char *cmdArray[MAX_INPUT];
 
-    while (split != NULL)
-    {
+    while (split != NULL) {
         cmdArray[i++] = split;
         split = strtok(NULL, " ");
         length++;
@@ -172,12 +147,15 @@ void commandConstructor(char *cmdStr, int count, Command* cmd) {
 }
 
 void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
-
+    // Initialize jobs property.
     job->background = false;
-    char *startPtr[MAX_ARG];
-    startPtr[0] = userInput;
+    Command myCommandArray[ptrCount];
+    // Count how many commands in userInput with multiple pipeline.
     int ptrCount = 1;
 
+    char *startPtr[MAX_ARG];
+    startPtr[0] = userInput;
+    // Replace pipeline char with '\0' to seperate commands as strings.
     for (int i = 0; i < userInputLength; i++) {
         if (userInput[i] == '|') {
             userInput[i] = '\0';
@@ -189,12 +167,7 @@ void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
         }
     }
 
-
-    Command myCommandArray[ptrCount];
-
-
     for (int i = 0; i < ptrCount; i++) {
-        // printf("startPtr storing value is: %s\n", startPtr[i]);
         commandConstructor(startPtr[i], ptrCount, &myCommandArray[i]);
         job->cmds[i] = myCommandArray[i];
     }
@@ -207,7 +180,6 @@ void checkBgComplete(int *jobCount, int *jobPid, int *jobStatus, char *jobInput[
     for (int i = 0; i < *jobCount; i++) {
         if (waitpid(jobPid[i], &jobStatus[i], WNOHANG) > 0) {
             fprintf(stderr, "+ completed '%s' [%d]\n", jobInput[i], WEXITSTATUS(jobStatus[i]));
-
             // Take the completed job out of the array and shift the array accordingly.
             free(jobInput[i]);
             for (int j = i; j < *jobCount; j++) {
@@ -228,19 +200,16 @@ int main(int argc, char *argv[])
     int jobStatus[MAX_BACKJOB];
     char *jobInput[MAX_BACKJOB];
 	while (1) {
-		// https://stackoverflow.com/questions/2693776/removing-trailing-newline-character-from-fgets-input
 		char userInput[MAX_INPUT];
 		char userInputCopy[MAX_INPUT];
 		pid_t pid;
 		int status;
-		// int count;
 		char buf[256];
 		char pre_cd[256];
         int saveStdout = dup(STDOUT_FILENO);
         int saveStdin = dup(STDIN_FILENO);
 
         printf("sshell$ ");
-		// Read user input, and append \0 at the end.
 		fgets(userInput, MAX_INPUT, stdin);
 
         /* Print command line if we're not getting stdin from the
@@ -252,12 +221,14 @@ int main(int argc, char *argv[])
 
 		char *lastCharPos;
         int userInputLength = 0;
+        // Replace trailing new line char with '\0'.
 		if ((lastCharPos = strchr(userInput, '\n')) != NULL) {
 			*lastCharPos = '\0';
             userInputLength = lastCharPos - userInput;
 		}
+        // This shoud not happen if stdin/stdout set correctly.
 		else {
-			perror("something goes wrong\n");
+			perror("possible ioCtrl issue\n");
 		}
 
         // Check if userInput is only spaces and tabs.
@@ -281,12 +252,13 @@ int main(int argc, char *argv[])
         // userInput is modified in this function.
         jobsConstructor(userInput, userInputLength, myjobPtr);
 
-        // Check if & is the only argument and there is only one command in job.
-        if ((myjobPtr->background == 1) && (myjobPtr->cmds[0].argCount < 1) && (myjobPtr->cmdCount == 1)) {
+        // Check if '&' is the only argument and there is only one command in job.
+        if (myjobPtr->background == 1 && myjobPtr->cmds[0].argCount < 1 && myjobPtr->cmdCount == 1) {
             fprintf(stderr,"Error: invalid command line\n");
             continue;
         }
-        //print exit
+
+        // Print exit.
         if (strcmp(myjobPtr->cmds[0].exec, "exit") == 0 && jobCount == 0) {
             fprintf(stderr, "Bye...\n");
             exit(0);
@@ -300,18 +272,18 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        //print cd
+        // Print cd.
 		else if ((strcmp(myjobPtr->cmds[0].exec, "cd") == 0)) {
 			getcwd(buf,sizeof(buf));
 			strcpy(pre_cd,buf);
-			//cd .. or cd .
+			// cd .. or cd .
 			if ((userInputCopy[strlen(userInputCopy)-1]) == '.') {
 				if ((userInputCopy[strlen(userInputCopy)-2]) == '.') {
 					chdir("..");
 				}
 				continue;
 			}
-			//cd filename
+			// cd filename.
 			if (chdir(myjobPtr->cmds[0].args[1]) != 0){
 				fprintf(stderr,"Error: no such directory\n");
 			}
@@ -322,8 +294,9 @@ int main(int argc, char *argv[])
         // Handle background.
         bool mislocatedSign = false;
         if (myjobPtr->background == 1) {
-        //handle mislocated background sign
+        // Handle mislocated background sign.
             for (int i = 0; i < myjobPtr->cmdCount; i++) {
+                // If '&' exists in command which is not the last command in job.
                 if (i < myjobPtr->cmdCount -1) {
                     if (myjobPtr->cmds[i].andCount > 0) {
                         fprintf(stderr,"Error: mislocated background sign\n");
@@ -382,10 +355,11 @@ int main(int argc, char *argv[])
             }
         }
 
-        //pipeline
+        // Pipeline job.
         // https://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
         int in, fd[2];
         in = 0;
+        // Set error flag to break the commands loop.
         bool error = false;
         int exit_status[MAX_ARG];
         if (myjobPtr->cmdCount > 1) {
@@ -407,7 +381,7 @@ int main(int argc, char *argv[])
                 // Connect pipe.
                 pipe(fd);
                 if (fork() == 0) {
-                    //child
+                    // Child.
 
                     // Open first command's input redirect file.
                     if (i == 0 && myjobPtr->cmds[i].lessExist) {
@@ -444,6 +418,7 @@ int main(int argc, char *argv[])
                     exit(1);
 
                 }
+                // Parent.
                 waitpid(-1, &status, 0);
                 exit_status[i] = WEXITSTATUS(status);
 
@@ -457,7 +432,7 @@ int main(int argc, char *argv[])
 
             pid = fork();
             if (pid == 0) {
-
+                // Child.
                 // Open last command's output redirect file.
                 if (myjobPtr->cmds[myjobPtr->cmdCount-1].largerExist == 1) {
                     if (myjobPtr->cmds[myjobPtr->cmdCount-1].fileOut == NULL) {
@@ -490,7 +465,7 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             else if (pid > 0) {
-                // parent
+                // Parent.
                 while(wait(&status) > 0);
                 exit_status[myjobPtr->cmdCount-1] = WEXITSTATUS(status);
                 fprintf(stderr, "+ completed '%s' ", userInputCopy);
@@ -503,9 +478,7 @@ int main(int argc, char *argv[])
                 perror("fork");
                 exit(1);
             }
-
         }
-
 
         pid = fork();
         if (pid == 0) {
@@ -552,7 +525,6 @@ int main(int argc, char *argv[])
         else {
         	perror("fork");
         	exit(1);
-
         }
 
         for (int i = 0; i < ptrToFreeCount; i++) {
@@ -560,6 +532,5 @@ int main(int argc, char *argv[])
             ptrToFree[i] = NULL;
             ptrToFreeCount = 0;
         }
-
 	}
 }
