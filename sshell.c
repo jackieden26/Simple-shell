@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
 		char userInput[MAX_INPUT];
 		char userInputCopy[MAX_INPUT];
 		pid_t pid;
-		int status;
+		int status = 0;
 		char buf[256];
 		char pre_cd[256];
         int saveStdout = dup(STDOUT_FILENO);
@@ -368,6 +368,14 @@ int main(int argc, char *argv[])
         if (myjobPtr->cmdCount > 1) {
             for (int i = 0; i < (myjobPtr->cmdCount -1); i++) {
                 // Check if output redirect only exists in last command.
+                // Check if input redirect wrongly exists in the last command.
+                if (i == 0) {
+                    if (myjobPtr->cmds[myjobPtr->cmdCount-1].lessExist == 1) {
+                        fprintf(stderr,"Error: mislocated input redirection\n");
+                        error = true;
+                        break;
+                    }
+                }
                 if (myjobPtr->cmds[i].largerExist == 1) {
                     fprintf(stderr,"Error: mislocated output redirection\n");
                     error = true;
@@ -454,11 +462,6 @@ int main(int argc, char *argv[])
                 }
 
                 if (in != 0) {
-                    // Check if input redirect wrongly exists in the last command.
-                    if (myjobPtr->cmds[myjobPtr->cmdCount-1].lessExist == 1) {
-                        fprintf(stderr,"Error: mislocated input redirection\n");
-                        continue;
-                    }
                     dup2(in, 0);
                 }
                 execvp(myjobPtr->cmds[myjobPtr->cmdCount - 1].exec, myjobPtr->cmds[myjobPtr->cmdCount - 1].args);
