@@ -151,7 +151,6 @@ void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
     job->background = false;
     // Count how many commands in userInput with multiple pipeline.
     int ptrCount = 1;
-    Command myCommandArray[ptrCount];
 
     char *startPtr[MAX_ARG];
     startPtr[0] = userInput;
@@ -167,6 +166,7 @@ void jobsConstructor(char* userInput, int userInputLength, Jobs* job) {
         }
     }
 
+    Command myCommandArray[ptrCount];
     for (int i = 0; i < ptrCount; i++) {
         commandConstructor(startPtr[i], ptrCount, &myCommandArray[i]);
         job->cmds[i] = myCommandArray[i];
